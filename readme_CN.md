@@ -46,7 +46,7 @@ providers:
 
 ```
 labels:
-  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_public_whitelist
+  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_whitelist
 ```
 
 ## 配置说明
@@ -103,6 +103,15 @@ cd /path/to/traefik_cdn_whitelist
 go test ./...
 ```
 
+### 发布与推送
+
+使用 Go 1.25 工具链：
+
+1. 执行 `go mod tidy && go mod vendor`，确保依赖锁定。
+2. 运行 `go test ./...` 以及 `make yaegi_test`，验证本地与 Yaegi 兼容性。
+3. 创建并推送新标签（例如 `git tag vX.Y.Z && git push origin vX.Y.Z`）。
+4. 如需更新 Traefik Catalog，请同步 README 示例中的版本号。
+
 ## 排查建议
 
 - 确保 Traefik 能访问相关 Provider 接口；失败信息会打印在插件日志中。
@@ -113,4 +122,3 @@ go test ./...
 
 - [Traefik 插件官方文档](https://doc.traefik.io/traefik-pilot/plugins/overview/)
 - [Traefik Middleware 说明](https://doc.traefik.io/traefik/middlewares/overview/)
-

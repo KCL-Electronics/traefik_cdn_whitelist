@@ -104,6 +104,15 @@ cd /path/to/traefik_cdn_whitelist
 go test ./...
 ```
 
+### Release & Publishing
+
+With Go 1.25 toolchain:
+
+1. `go mod tidy` and `go mod vendor` to pin dependencies.
+2. `go test ./...` followed by `make yaegi_test` to ensure native + Yaegi compatibility.
+3. Tag the repository (`git tag vX.Y.Z && git push origin vX.Y.Z`).
+4. Update the Traefik catalog entry if needed and bump the version in static config snippets.
+
 ## Troubleshooting Tips
 
 - Ensure the Traefik process can reach the provider endpoints; failures show up in the plugin logs.
