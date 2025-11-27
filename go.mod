@@ -1,4 +1,4 @@
-module github.com/Shoggomo/traefik_dynamic_public_whitelist
+module github.com/KCL-Electronics/traefik_cdn_whitelist
 
 go 1.17
 

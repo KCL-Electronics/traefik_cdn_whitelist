@@ -6,58 +6,48 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
-	//"time"
 
-	"github.com/Shoggomo/traefik_dynamic_public_whitelist"
+	traefikdynamicpublicwhitelist "github.com/KCL-Electronics/traefik_cdn_whitelist"
 	"github.com/traefik/genconf/dynamic"
 	"github.com/traefik/genconf/dynamic/tls"
 )
 
-func TestNew(t *testing.T) {
-	// Create a test server to mock the HTTP endpoint
-	mockServerv4 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("192.0.2.123")) // Mock response with a sample IP address
+func TestProvideCustomProvider(t *testing.T) {
+	mockRequestV4 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte("192.0.2.123"))
+		if err != nil {
+			return
+		}
 	}))
-	defer mockServerv4.Close()
+	t.Cleanup(mockRequestV4.Close)
 
-	mockServerv6 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("1234:1234:1234:1234:1234:1234:1234:1234")) // Mock response with a sample IP address
+	mockRequestV6 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte("1234:1234:1234:1234:1234:1234:1234:1234"))
+		if err != nil {
+			return
+		}
 	}))
-	defer mockServerv6.Close()
+	t.Cleanup(mockRequestV6.Close)
 
-	config := traefik_dynamic_public_whitelist.CreateConfig()
+	config := traefikdynamicpublicwhitelist.CreateConfig()
+	config.Provider = traefikdynamicpublicwhitelist.ProviderCustom
 	config.PollInterval = "1s"
-	config.IPv4Resolver = mockServerv4.URL
-	config.IPv6Resolver = mockServerv6.URL
+	config.IPv4Resolver = mockRequestV4.URL
+	config.IPv6Resolver = mockRequestV6.URL
 	config.WhitelistIPv6 = true
 	config.AdditionalSourceRange = []string{"127.0.0.1/32", "192.168.0.24"}
-	config.IPStrategy = dynamic.IPStrategy{
-		Depth:       1,
-		ExcludedIPs: []string{"123.0.0.1"},
-	}
+	config.IPStrategy = dynamic.IPStrategy{Depth: 1, ExcludedIPs: []string{"123.0.0.1"}}
 
-	provider, err := traefik_dynamic_public_whitelist.New(context.Background(), config, "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	provider := newProvider(t, config)
 	t.Cleanup(func() {
-		err = provider.Stop()
-		if err != nil {
-			t.Fatal(err)
+		if err := provider.Stop(); err != nil {
+			t.Fatalf("stop provider: %v", err)
 		}
 	})
-
-	err = provider.Init()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	cfgChan := make(chan json.Marshaler)
-
-	err = provider.Provide(cfgChan)
-	if err != nil {
+	if err := provider.Provide(cfgChan); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,33 +55,21 @@ func TestNew(t *testing.T) {
 
 	expected := &dynamic.Configuration{
 		HTTP: &dynamic.HTTPConfiguration{
-			Routers:  make(map[string]*dynamic.Router),
-			Services: make(map[string]*dynamic.Service),
+			Routers:  map[string]*dynamic.Router{},
+			Services: map[string]*dynamic.Service{},
 			Middlewares: map[string]*dynamic.Middleware{
 				"public_ipwhitelist": {
 					IPWhiteList: &dynamic.IPWhiteList{
 						SourceRange: []string{"127.0.0.1/32", "192.168.0.24", "192.0.2.123", "1234:1234:1234:1234::/64"},
-						IPStrategy: &dynamic.IPStrategy{
-							Depth:       1,
-							ExcludedIPs: []string{"123.0.0.1"},
-						},
+						IPStrategy:  &dynamic.IPStrategy{Depth: 1, ExcludedIPs: []string{"123.0.0.1"}},
 					},
 				},
 			},
-			ServersTransports: make(map[string]*dynamic.ServersTransport),
+			ServersTransports: map[string]*dynamic.ServersTransport{},
 		},
-		TCP: &dynamic.TCPConfiguration{
-			Routers:  make(map[string]*dynamic.TCPRouter),
-			Services: make(map[string]*dynamic.TCPService),
-		},
-		TLS: &dynamic.TLSConfiguration{
-			Stores:  make(map[string]tls.Store),
-			Options: make(map[string]tls.Options),
-		},
-		UDP: &dynamic.UDPConfiguration{
-			Routers:  make(map[string]*dynamic.UDPRouter),
-			Services: make(map[string]*dynamic.UDPService),
-		},
+		TCP: &dynamic.TCPConfiguration{Routers: map[string]*dynamic.TCPRouter{}, Services: map[string]*dynamic.TCPService{}},
+		TLS: &dynamic.TLSConfiguration{Stores: map[string]tls.Store{}, Options: map[string]tls.Options{}},
+		UDP: &dynamic.UDPConfiguration{Routers: map[string]*dynamic.UDPRouter{}, Services: map[string]*dynamic.UDPService{}},
 	}
 
 	expectedJSON, err := json.MarshalIndent(expected, "", "  ")
@@ -109,6 +87,159 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func boolPtr(v bool) *bool {
-	return &v
+func TestProviderRequiresName(t *testing.T) {
+	cfg := traefikdynamicpublicwhitelist.CreateConfig()
+	cfg.Provider = ""
+	if _, err := traefikdynamicpublicwhitelist.New(context.Background(), cfg, "test"); err == nil {
+		t.Fatal("expected error when provider missing")
+	}
+}
+
+func TestCustomProviderRequiresResolvers(t *testing.T) {
+	cfg := baseConfig(traefikdynamicpublicwhitelist.ProviderCustom)
+	cfg.IPv4Resolver = ""
+	if _, err := traefikdynamicpublicwhitelist.New(context.Background(), cfg, "test"); err == nil {
+		t.Fatal("expected error when ipv4Resolver missing")
+	}
+}
+
+func TestCloudflareProvider(t *testing.T) {
+	ipv4Data := "198.51.100.0/24\n203.0.113.0/25"
+	ipv6Data := "2001:db8::/32\n2001:db8:1::/48"
+
+	v4Srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-Kes-RequestID")
+		_, err := w.Write([]byte(ipv4Data))
+		if err != nil {
+			return
+		}
+	}))
+	t.Cleanup(v4Srv.Close)
+
+	v6Srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-Kes-RequestID")
+		_, err := w.Write([]byte(ipv6Data))
+		if err != nil {
+			return
+		}
+	}))
+	t.Cleanup(v6Srv.Close)
+
+	traefikdynamicpublicwhitelist.SetCloudflareEndpoints(v4Srv.URL, v6Srv.URL)
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetCloudflareEndpoints("https://www.cloudflare.com/ips-v4/", "https://www.cloudflare.com/ips-v6/")
+	})
+
+	config := baseConfig(traefikdynamicpublicwhitelist.ProviderCloudflare)
+	config.WhitelistIPv6 = true
+
+	cfg := loadOnce(t, config)
+
+	got := cfg.HTTP.Middlewares["public_ipwhitelist"].IPWhiteList.SourceRange
+	expected := []string{"198.51.100.0/24", "203.0.113.0/25", "2001:db8::/32", "2001:db8:1::/48"}
+
+	if strings.Join(got, ",") != strings.Join(expected, ",") {
+		t.Fatalf("unexpected source ranges: %v", got)
+	}
+}
+
+func TestFastlyProvider(t *testing.T) {
+	payload := `{"addresses":["198.51.100.0/24"],"ipv6_addresses":["2001:db8::/48"]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-Kes-RequestID")
+		_, err := w.Write([]byte(payload))
+		if err != nil {
+			return
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	traefikdynamicpublicwhitelist.SetFastlyEndpoint(srv.URL)
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetFastlyEndpoint("https://api.fastly.com/public-ip-list")
+	})
+
+	config := baseConfig(traefikdynamicpublicwhitelist.ProviderFastly)
+	config.WhitelistIPv6 = true
+
+	cfg := loadOnce(t, config)
+
+	got := cfg.HTTP.Middlewares["public_ipwhitelist"].IPWhiteList.SourceRange
+	if len(got) != 2 {
+		t.Fatalf("expected two ranges, got %v", got)
+	}
+}
+
+func TestCloudfrontProvider(t *testing.T) {
+	payload := `{"prefixes":[{"ip_prefix":"198.51.100.0/24","service":"CLOUDFRONT"}],"ipv6_prefixes":[{"ipv6_prefix":"2001:db8::/48","service":"CLOUDFRONT"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-Kes-RequestID")
+		_, err := w.Write([]byte(payload))
+		if err != nil {
+			return
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	traefikdynamicpublicwhitelist.SetAwsIPRangesEndpoint(srv.URL)
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetAwsIPRangesEndpoint("https://ip-ranges.amazonaws.com/ip-ranges.json")
+	})
+
+	config := baseConfig(traefikdynamicpublicwhitelist.ProviderCloudfront)
+	config.WhitelistIPv6 = true
+
+	cfg := loadOnce(t, config)
+
+	got := cfg.HTTP.Middlewares["public_ipwhitelist"].IPWhiteList.SourceRange
+	if len(got) != 2 {
+		t.Fatalf("expected two ranges, got %v", got)
+	}
+}
+
+func baseConfig(provider string) *traefikdynamicpublicwhitelist.Config {
+	cfg := traefikdynamicpublicwhitelist.CreateConfig()
+	cfg.Provider = provider
+	cfg.PollInterval = "1s"
+	return cfg
+}
+
+func newProvider(t *testing.T, cfg *traefikdynamicpublicwhitelist.Config) *traefikdynamicpublicwhitelist.Provider {
+	t.Helper()
+
+	provider, err := traefikdynamicpublicwhitelist.New(context.Background(), cfg, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := provider.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		if err := provider.Stop(); err != nil {
+			t.Fatalf("stop provider: %v", err)
+		}
+	})
+
+	return provider
+}
+
+func loadOnce(t *testing.T, cfg *traefikdynamicpublicwhitelist.Config) *dynamic.Configuration {
+	t.Helper()
+
+	provider := newProvider(t, cfg)
+	configuration, err := provider.GenerateConfiguration(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return configuration
+}
+
+func assertHeader(t *testing.T, r *http.Request, name string) {
+	t.Helper()
+	if val := r.Header.Get(name); val == "" {
+		t.Fatalf("expected header %s", name)
+	}
 }

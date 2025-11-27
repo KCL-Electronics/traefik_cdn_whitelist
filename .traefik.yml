@@ -1,7 +1,7 @@
 displayName: Public Dynamic IP Whitelist
 type: provider
 
-import: github.com/Shoggomo/traefik_dynamic_public_whitelist
+import: github.com/KCL-Electronics/traefik_cdn_whitelist
 
 summary: 'Public Dynamic IP Whitelist Plugin'
 
