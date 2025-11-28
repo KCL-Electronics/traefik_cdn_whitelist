@@ -4,7 +4,7 @@
 
 ## 功能亮点
 
-- **多种来源**：支持 `cloudflare`、`fastly`、`cloudfront`、`custom` 四种 Provider，覆盖主流 CDN 或自定义业务场景。
+- **多种来源**：支持 `cloudflare`、`fastly`、`cloudfront`、`custom` 四种 Provider，可用逗号分隔组合多个来源。
 - **IPv6 支持**：可独立开启/关闭 IPv6；若 Provider 仅返回单个 IPv6 地址，会自动转换为 `/64` 前缀。
 - **附加网段**：可通过 `additionalSourceRange` 追加企业办公 IP、VPN 等自定义网段。
 - **请求可追踪**：所有对外 HTTP 请求都会带上 `X-Kes-RequestID` 头，值为随机 32 位十六进制字符串，便于排查和日志关联。
@@ -27,7 +27,7 @@ experimental:
 providers:
   plugin:
     traefik_dynamic_public_whitelist:
-      provider: cloudflare            # 必填: cloudflare|fastly|cloudfront|custom
+      provider: cloudflare,fastly    # 支持单个值或逗号分隔列表
       pollInterval: "120s"            # 选填, 默认 300s
       whitelistIPv6: true             # 选填, 默认 false
       additionalSourceRange:
@@ -46,14 +46,14 @@ providers:
 
 ```
 labels:
-  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_public_whitelist
+  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_whitelist
 ```
 
 ## 配置说明
 
 | 配置项 | 是否必填 | 说明 |
 | --- | --- | --- |
-| `provider` | ✅ | 选择网段来源：`cloudflare`、`fastly`、`cloudfront`、`custom`。 |
+| `provider` | ✅ | 选择网段来源：可填写单个值或逗号分隔的 `cloudflare`、`fastly`、`cloudfront`、`custom` 组合。 |
 | `pollInterval` | ❌ | 刷新频率，支持 Go Duration（`300s`、`10m` 等）。 |
 | `whitelistIPv6` | ❌ | 是否包含 IPv6 数据。 |
 | `additionalSourceRange` | ❌ | 自定义追加 CIDR 列表。 |

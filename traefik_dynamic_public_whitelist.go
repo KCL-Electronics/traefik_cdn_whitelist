@@ -86,7 +86,7 @@ func CreateConfig() *Config {
 // Provider a simple provider plugin.
 type Provider struct {
 	name                  string
-	providerName          string
+	providerNames         []string
 	pollInterval          time.Duration
 	ipv4Resolver          string
 	ipv6Resolver          string
@@ -115,16 +115,22 @@ func New(ctx context.Context, config *Config, name string) (*Provider, error) {
 		return nil, err
 	}
 
-	providerName := normalizeProviderName(config.Provider)
-	if providerName == "" {
-		return nil, fmt.Errorf("provider is required")
+	providerNames, err := parseProviders(config.Provider)
+	if err != nil {
+		return nil, err
 	}
 
-	if _, ok := supportedProviders[providerName]; !ok {
-		return nil, fmt.Errorf("unsupported provider %q", config.Provider)
+	hasCustom := false
+	for _, providerName := range providerNames {
+		if _, ok := supportedProviders[providerName]; !ok {
+			return nil, fmt.Errorf("unsupported provider %q", providerName)
+		}
+		if providerName == providerCustom {
+			hasCustom = true
+		}
 	}
 
-	if providerName == providerCustom {
+	if hasCustom {
 		if strings.TrimSpace(config.IPv4Resolver) == "" {
 			return nil, fmt.Errorf("custom provider requires an ipv4Resolver")
 		}
@@ -137,7 +143,7 @@ func New(ctx context.Context, config *Config, name string) (*Provider, error) {
 
 	return &Provider{
 		name:                  name,
-		providerName:          providerName,
+		providerNames:         providerNames,
 		pollInterval:          pi,
 		ipv4Resolver:          config.IPv4Resolver,
 		ipv6Resolver:          config.IPv6Resolver,
@@ -293,18 +299,50 @@ func (p *Provider) buildSourceRanges(ctx context.Context) ([]string, error) {
 }
 
 func (p *Provider) fetchProviderRanges(ctx context.Context) ([]string, error) {
-	switch p.providerName {
-	case providerCloudflare:
-		return p.fetchCloudflareRanges(ctx)
-	case providerFastly:
-		return p.fetchFastlyRanges(ctx)
-	case providerCloudfront:
-		return p.fetchCloudfrontRanges(ctx)
-	case providerCustom:
-		return p.fetchCustomRanges(ctx)
-	default:
-		return nil, fmt.Errorf("unsupported provider %q", p.providerName)
+	seen := make(map[string]struct{})
+	combined := make([]string, 0)
+
+	for _, providerName := range p.providerNames {
+		var (
+			ranges []string
+			err    error
+		)
+
+		switch providerName {
+		case providerCloudflare:
+			ranges, err = p.fetchCloudflareRanges(ctx)
+		case providerFastly:
+			ranges, err = p.fetchFastlyRanges(ctx)
+		case providerCloudfront:
+			ranges, err = p.fetchCloudfrontRanges(ctx)
+		case providerCustom:
+			ranges, err = p.fetchCustomRanges(ctx)
+		default:
+			err = fmt.Errorf("unsupported provider %q", providerName)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, cidr := range ranges {
+			cidr = strings.TrimSpace(cidr)
+			if cidr == "" {
+				continue
+			}
+			if _, ok := seen[cidr]; ok {
+				continue
+			}
+			seen[cidr] = struct{}{}
+			combined = append(combined, cidr)
+		}
 	}
+
+	if len(combined) == 0 {
+		return nil, fmt.Errorf("no ranges resolved from providers %v", p.providerNames)
+	}
+
+	return combined, nil
 }
 
 func (p *Provider) fetchCloudflareRanges(ctx context.Context) ([]string, error) {
@@ -505,6 +543,41 @@ func newRequestID() string {
 
 func normalizeProviderName(name string) string {
 	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func parseProviders(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("provider is required")
+	}
+
+	tokens := []string{raw}
+	if strings.ContainsAny(raw, ",，") {
+		tokens = strings.FieldsFunc(raw, func(r rune) bool {
+			return r == ',' || r == '，'
+		})
+	}
+
+	providers := make([]string, 0, len(tokens))
+	seen := make(map[string]struct{})
+
+	for _, token := range tokens {
+		name := normalizeProviderName(token)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+
+		seen[name] = struct{}{}
+		providers = append(providers, name)
+	}
+
+	if len(providers) == 0 {
+		return nil, fmt.Errorf("provider is required")
+	}
+
+	return providers, nil
 }
 
 // The following setters help tests override external endpoints without touching private vars.

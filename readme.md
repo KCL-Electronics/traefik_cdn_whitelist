@@ -4,7 +4,7 @@ Create a Traefik middleware that automatically tracks the public IPs or CDN rang
 
 ## Highlights
 
-- **Provider-driven**: choose between `cloudflare`, `fastly`, `cloudfront`, or `custom` to decide where ranges originate.
+- **Provider-driven**: choose one or several of `cloudflare`, `fastly`, `cloudfront`, or `custom` (comma-separated) to decide where ranges originate.
 - **IPv6 awareness**: toggle IPv6 independently; responses are normalized into `/64` prefixes when derived from single IPs.
 - **Extra safety**: merge your own `additionalSourceRange` entries before emitting the middleware.
 - **Deterministic headers**: every outbound HTTP call includes an `X-Kes-RequestID` header populated by a random 32-hex identifier for traceability.
@@ -27,7 +27,7 @@ experimental:
 providers:
   plugin:
     traefik_dynamic_public_whitelist:
-      provider: cloudflare            # required: cloudflare|fastly|cloudfront|custom
+      provider: cloudflare,fastly    # required: accepts single value or comma list
       pollInterval: "120s"            # optional, defaults to 300s
       whitelistIPv6: true             # optional, defaults to false
       additionalSourceRange:
@@ -46,14 +46,14 @@ Attach the middleware wherever you need it (file provider, Docker labels, Kubern
 
 ```
 labels:
-  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_public_whitelist
+  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_whitelist
 ```
 
 ## Configuration Reference
 
 | Setting | Required | Description |
 | --- | --- | --- |
-| `provider` | ✅ | Determines which backend is queried (`cloudflare`, `fastly`, `cloudfront`, `custom`). |
+| `provider` | ✅ | Determines which backend is queried (single value or comma-separated mix of `cloudflare`, `fastly`, `cloudfront`, `custom`). |
 | `pollInterval` | ❌ | How often to refresh ranges. Supports Go duration strings (`300s`, `10m`). |
 | `whitelistIPv6` | ❌ | Include IPv6 data from the provider/custom resolvers. |
 | `additionalSourceRange` | ❌ | CIDRs appended to the provider ranges. Useful for office IPs or VPN blocks. |

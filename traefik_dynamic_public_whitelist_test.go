@@ -201,6 +201,62 @@ func TestCloudfrontProvider(t *testing.T) {
 	}
 }
 
+func TestMultipleProviders(t *testing.T) {
+	cloudflareData := "198.51.100.0/24\n203.0.113.0/25"
+	cloudflareSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-Kes-RequestID")
+		_, err := w.Write([]byte(cloudflareData))
+		if err != nil {
+			return
+		}
+	}))
+	t.Cleanup(cloudflareSrv.Close)
+
+	fastlyPayload := `{"addresses":["192.0.2.0/24"],"ipv6_addresses":[]}`
+	fastlySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-Kes-RequestID")
+		_, err := w.Write([]byte(fastlyPayload))
+		if err != nil {
+			return
+		}
+	}))
+	t.Cleanup(fastlySrv.Close)
+
+	traefikdynamicpublicwhitelist.SetCloudflareEndpoints(cloudflareSrv.URL, "")
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetCloudflareEndpoints(
+			"https://www.cloudflare.com/ips-v4/",
+			"https://www.cloudflare.com/ips-v6/",
+		)
+	})
+
+	traefikdynamicpublicwhitelist.SetFastlyEndpoint(fastlySrv.URL)
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetFastlyEndpoint("https://api.fastly.com/public-ip-list")
+	})
+
+	cfg := baseConfig("cloudflare, fastly")
+
+	configuration := loadOnce(t, cfg)
+	got := configuration.HTTP.Middlewares["public_ipwhitelist"].IPWhiteList.SourceRange
+
+	expected := []string{"198.51.100.0/24", "203.0.113.0/25", "192.0.2.0/24"}
+	if len(got) != len(expected) {
+		t.Fatalf("unexpected range count: got %d want %d", len(got), len(expected))
+	}
+
+	seen := make(map[string]struct{})
+	for _, cidr := range got {
+		seen[cidr] = struct{}{}
+	}
+
+	for _, cidr := range expected {
+		if _, ok := seen[cidr]; !ok {
+			t.Fatalf("missing cidr %s in %v", cidr, got)
+		}
+	}
+}
+
 func baseConfig(provider string) *traefikdynamicpublicwhitelist.Config {
 	cfg := traefikdynamicpublicwhitelist.CreateConfig()
 	cfg.Provider = provider
