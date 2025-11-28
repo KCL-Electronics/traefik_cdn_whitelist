@@ -21,7 +21,7 @@ Create a Traefik middleware that automatically tracks the public IPs or CDN rang
 experimental:
   plugins:
     traefik_dynamic_public_whitelist:
-      moduleName: github.com/KCL-Electronics/traefik_cdn_whitelist
+      moduleName: github.com/KCL-Electronics/traefik-cdn-whitelist/v2
       version: v0.1.0 # pin the commit/tag you trust
 
 providers:

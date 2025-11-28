@@ -60,7 +60,8 @@ type httpGetter func(ctx context.Context, url string) ([]byte, error)
 
 // Config the plugin configuration.
 type Config struct {
-	Provider              string   `json:"provider"`
+	Provider              string   `json:"provider,omitempty"`
+	Providers             []string `json:"providers,omitempty"`
 	PollInterval          string   `json:"pollInterval,omitempty"`
 	IPv4Resolver          string   `json:"ipv4Resolver,omitempty"`
 	IPv6Resolver          string   `json:"ipv6Resolver,omitempty"`
@@ -116,7 +117,7 @@ func New(ctx context.Context, config *Config, name string) (*Provider, error) {
 		return nil, err
 	}
 
-	providerNames, err := parseProviders(config.Provider)
+	providerNames, err := mergeProviders(config.Provider, config.Providers)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +613,46 @@ func parseProviders(raw string) ([]string, error) {
 	return providers, nil
 }
 
-// The following setters help tests override external endpoints without touching private vars.
+func mergeProviders(legacy string, extra []string) ([]string, error) {
+	collected := make([]string, 0, len(extra)+1)
+
+	legacy = strings.TrimSpace(legacy)
+	if legacy != "" {
+		parsed, err := parseProviders(legacy)
+		if err != nil {
+			return nil, err
+		}
+		collected = append(collected, parsed...)
+	}
+
+	seen := make(map[string]struct{}, len(collected))
+	for _, name := range collected {
+		seen[name] = struct{}{}
+	}
+
+	for _, raw := range extra {
+		name := normalizeProviderName(raw)
+		if name == "" {
+			continue
+		}
+		if _, ok := supportedProviders[name]; !ok {
+			return nil, fmt.Errorf("unsupported provider %q", raw)
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		collected = append(collected, name)
+	}
+
+	if len(collected) == 0 {
+		return nil, fmt.Errorf("provider is required")
+	}
+
+	return collected, nil
+}
+
+// SetCloudflareEndpoints The following setters help tests override external endpoints without touching private vars.
 // SetCloudflareEndpoints overrides the default Cloudflare IPv4/IPv6 endpoints (used in tests).
 func SetCloudflareEndpoints(v4, v6 string) {
 	if v4 != "" {

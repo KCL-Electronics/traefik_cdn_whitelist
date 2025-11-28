@@ -21,7 +21,7 @@
 experimental:
   plugins:
     traefik_dynamic_public_whitelist:
-      moduleName: github.com/KCL-Electronics/traefik_cdn_whitelist
+      moduleName: github.com/KCL-Electronics/traefik-cdn-whitelist/v2
       version: v0.1.0  # 请锁定可信版本
 
 providers:

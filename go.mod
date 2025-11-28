@@ -1,4 +1,4 @@
-module github.com/KCL-Electronics/traefik_cdn_whitelist
+module github.com/KCL-Electronics/traefik-cdn-whitelist/v2
 
 go 1.20
 

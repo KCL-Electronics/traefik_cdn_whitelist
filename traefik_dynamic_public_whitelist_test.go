@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	traefikdynamicpublicwhitelist "github.com/KCL-Electronics/traefik_cdn_whitelist"
+	traefikdynamicpublicwhitelist "github.com/KCL-Electronics/traefik-cdn-whitelist/v2"
 	"github.com/traefik/genconf/dynamic"
 	"github.com/traefik/genconf/dynamic/tls"
 )

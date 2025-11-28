@@ -1,7 +1,7 @@
 displayName: Public Dynamic IP Whitelist
 type: provider
 
-import: github.com/KCL-Electronics/traefik_cdn_whitelist
+import: github.com/KCL-Electronics/traefik-cdn-whitelist/v2
 
 summary: 'Public Dynamic IP Whitelist Plugin'
 
