@@ -63,12 +63,12 @@ labels:
 
 ## Provider 行为
 
-| Provider | 数据源 | 备注 |
-| --- | --- | --- |
-| `cloudflare` | `https://www.cloudflare.com/ips-v4/`、`https://www.cloudflare.com/ips-v6/` | 未开启 `whitelistIPv6` 时不会请求 IPv6。 |
-| `fastly` | `https://api.fastly.com/public-ip-list` | 解析 JSON 中的 `addresses` 与 `ipv6_addresses`。 |
-| `cloudfront` | `https://ip-ranges.amazonaws.com/ip-ranges.json` | 仅保留 `service == CLOUDFRONT` 的条目。 |
-| `custom` | 用户自定义接口 | 需返回单个 IPv4/IPv6；IPv6 自动转 `/64`。
+| Provider     | 数据源                                                                       | 备注                                         |
+|--------------|---------------------------------------------------------------------------|--------------------------------------------|
+| `cloudflare` | `https://www.cloudflare.com/ips-v4/`、`https://www.cloudflare.com/ips-v6/` | 未开启 `whitelistIPv6` 时不会请求 IPv6。            |
+| `fastly`     | `https://api.fastly.com/public-ip-list`                                   | 解析 JSON 中的 `addresses` 与 `ipv6_addresses`。 |
+| `cloudfront` | `https://ip-ranges.amazonaws.com/ip-ranges.json`                          | 仅保留 `service == CLOUDFRONT` 的条目。           |
+| `custom`     | 用户自定义接口                                                                   | 需返回单个 IPv4/IPv6；IPv6 自动转 `/64`。            |
 
 ### Custom Provider 示例
 
@@ -105,7 +105,7 @@ go test ./...
 
 ### 发布与推送
 
-使用 Go 1.25 工具链：
+使用 Go 1.2 工具链：
 
 1. 执行 `go mod tidy && go mod vendor`，确保依赖锁定。
 2. 运行 `go test ./...` 以及 `make yaegi_test`，验证本地与 Yaegi 兼容性。

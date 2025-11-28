@@ -5,5 +5,10 @@ import: github.com/KCL-Electronics/traefik_cdn_whitelist
 
 summary: 'Public Dynamic IP Whitelist Plugin'
 
-testData: {}
+testData:
+  provider: cloudflare,fastly
+  pollInterval: "120s"
+  whitelistIPv6: true
+  additionalSourceRange:
+    - 127.0.0.1/32
   

@@ -106,7 +106,7 @@ go test ./...
 
 ### Release & Publishing
 
-With Go 1.25 toolchain:
+With Go 1.2 toolchain:
 
 1. `go mod tidy` and `go mod vendor` to pin dependencies.
 2. `go test ./...` followed by `make yaegi_test` to ensure native + Yaegi compatibility.
