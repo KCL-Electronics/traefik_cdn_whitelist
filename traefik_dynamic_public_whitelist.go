@@ -5,7 +5,7 @@ package traefik_dynamic_public_whitelist
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -531,14 +531,45 @@ func closeBody(body io.ReadCloser) {
 	}
 }
 
+// formatUUID formats a 16-byte array into UUID string representation.
+func formatUUID(b [16]byte) string {
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%04x%08x",
+		binary.BigEndian.Uint32(b[0:4]),
+		binary.BigEndian.Uint16(b[4:6]),
+		binary.BigEndian.Uint16(b[6:8]),
+		binary.BigEndian.Uint16(b[8:10]),
+		binary.BigEndian.Uint16(b[10:12]),
+		binary.BigEndian.Uint32(b[12:16]),
+	)
+}
+
 func newRequestID() string {
-	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		timestamp := time.Now().UnixNano()
-		return fmt.Sprintf("%032x", timestamp)
+	var b [16]byte
+
+	// fill UUID fields according to RFC 4122 version 7
+	ts := uint64(time.Now().UnixMilli())
+	b[0] = byte(ts >> 40)
+	b[1] = byte(ts >> 32)
+	b[2] = byte(ts >> 24)
+	b[3] = byte(ts >> 16)
+	b[4] = byte(ts >> 8)
+	b[5] = byte(ts)
+
+	// random bits for the rest
+	if _, err := rand.Read(b[6:]); err != nil {
+		// random source failure, fallback to time-based ID, not RFC compliant though, avoiding panic
+		return fmt.Sprintf("tpe0::%032x", time.Now().UnixNano())
 	}
 
-	return hex.EncodeToString(buf[:])
+	// set version = 7 (0111 xxxx)
+	b[6] &= 0x0f
+	b[6] |= 0x70
+
+	// set variant = RFC 4122（10xx xxxx）
+	b[8] &= 0x3f
+	b[8] |= 0x80
+
+	return "nbg0::" + formatUUID(b)
 }
 
 func normalizeProviderName(name string) string {
