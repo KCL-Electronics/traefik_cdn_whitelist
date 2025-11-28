@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -254,6 +255,104 @@ func TestMultipleProviders(t *testing.T) {
 		if _, ok := seen[cidr]; !ok {
 			t.Fatalf("missing cidr %s in %v", cidr, got)
 		}
+	}
+}
+
+func TestRequestIDHeaderUUIDv7(t *testing.T) {
+	traefikdynamicpublicwhitelist.SetRequestIDGenerator(nil)
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetRequestIDGenerator(nil)
+	})
+
+	ipv4Data := "198.51.100.0/24"
+	uuidPattern := regexp.MustCompile(`^nbg0::[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("X-Kes-RequestID")
+		if !uuidPattern.MatchString(header) {
+			t.Fatalf("request id %q is not uuidv7", header)
+		}
+		_, _ = w.Write([]byte(ipv4Data))
+	}))
+	t.Cleanup(srv.Close)
+
+	traefikdynamicpublicwhitelist.SetCloudflareEndpoints(srv.URL, "")
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetCloudflareEndpoints(
+			"https://www.cloudflare.com/ips-v4/",
+			"https://www.cloudflare.com/ips-v6/",
+		)
+	})
+
+	cfg := baseConfig(traefikdynamicpublicwhitelist.ProviderCloudflare)
+
+	configuration := loadOnce(t, cfg)
+	if len(configuration.HTTP.Middlewares["public_ipwhitelist"].IPWhiteList.SourceRange) == 0 {
+		t.Fatal("expected source ranges")
+	}
+}
+
+func TestRequestIDHeaderCustomFormat(t *testing.T) {
+	const customID = "tpe0::custom-header"
+	traefikdynamicpublicwhitelist.SetRequestIDGenerator(func() string { return customID })
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetRequestIDGenerator(nil)
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("X-Kes-RequestID")
+		if header != customID {
+			t.Fatalf("expected header %q got %q", customID, header)
+		}
+		_, _ = w.Write([]byte("198.51.100.0/24"))
+	}))
+	t.Cleanup(srv.Close)
+
+	traefikdynamicpublicwhitelist.SetCloudflareEndpoints(srv.URL, "")
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetCloudflareEndpoints(
+			"https://www.cloudflare.com/ips-v4/",
+			"https://www.cloudflare.com/ips-v6/",
+		)
+	})
+
+	cfg := baseConfig(traefikdynamicpublicwhitelist.ProviderCloudflare)
+
+	configuration := loadOnce(t, cfg)
+	if len(configuration.HTTP.Middlewares["public_ipwhitelist"].IPWhiteList.SourceRange) == 0 {
+		t.Fatal("expected source ranges")
+	}
+}
+
+func TestConfigurationSnapshotLogging(t *testing.T) {
+	cloudflareData := "198.51.100.0/24\n203.0.113.0/25"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assertHeader(t, r, "X-Kes-RequestID")
+		_, _ = w.Write([]byte(cloudflareData))
+	}))
+	t.Cleanup(srv.Close)
+
+	traefikdynamicpublicwhitelist.SetCloudflareEndpoints(srv.URL, "")
+	t.Cleanup(func() {
+		traefikdynamicpublicwhitelist.SetCloudflareEndpoints(
+			"https://www.cloudflare.com/ips-v4/",
+			"https://www.cloudflare.com/ips-v6/",
+		)
+	})
+
+	cfg := baseConfig(traefikdynamicpublicwhitelist.ProviderCloudflare)
+	configuration := loadOnce(t, cfg)
+
+	payload, err := json.MarshalIndent(configuration, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal configuration: %v", err)
+	}
+
+	t.Logf("configuration snapshot:\n%s", string(payload))
+
+	got := configuration.HTTP.Middlewares["public_ipwhitelist"].IPWhiteList.SourceRange
+	if len(got) == 0 {
+		t.Fatal("expected source ranges in configuration snapshot")
 	}
 }
 

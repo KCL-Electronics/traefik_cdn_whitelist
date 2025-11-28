@@ -53,6 +53,7 @@ var (
 		providerCloudfront: {},
 		providerCustom:     {},
 	}
+	requestIDGenerator = newRequestID
 )
 
 type httpGetter func(ctx context.Context, url string) ([]byte, error)
@@ -501,7 +502,7 @@ func defaultHTTPGetter(client *http.Client) httpGetter {
 			return nil, err
 		}
 
-		req.Header.Set("X-Kes-RequestID", newRequestID())
+		req.Header.Set("X-Kes-RequestID", requestIDGenerator())
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -634,4 +635,13 @@ func SetAwsIPRangesEndpoint(url string) {
 	if url != "" {
 		awsIPRangesEndpoint = url
 	}
+}
+
+// SetRequestIDGenerator allows tests to override the request ID generator (pass nil to reset).
+func SetRequestIDGenerator(fn func() string) {
+	if fn == nil {
+		requestIDGenerator = newRequestID
+		return
+	}
+	requestIDGenerator = fn
 }
