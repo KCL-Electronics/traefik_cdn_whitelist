@@ -15,7 +15,7 @@ import (
 )
 
 func TestProvideCustomProvider(t *testing.T) {
-	mockRequestV4 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockRequestV4 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, err := w.Write([]byte("192.0.2.123"))
 		if err != nil {
 			return
@@ -23,7 +23,7 @@ func TestProvideCustomProvider(t *testing.T) {
 	}))
 	t.Cleanup(mockRequestV4.Close)
 
-	mockRequestV6 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockRequestV6 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, err := w.Write([]byte("1234:1234:1234:1234:1234:1234:1234:1234"))
 		if err != nil {
 			return
@@ -127,7 +127,10 @@ func TestCloudflareProvider(t *testing.T) {
 
 	traefikdynamicpublicwhitelist.SetCloudflareEndpoints(v4Srv.URL, v6Srv.URL)
 	t.Cleanup(func() {
-		traefikdynamicpublicwhitelist.SetCloudflareEndpoints("https://www.cloudflare.com/ips-v4/", "https://www.cloudflare.com/ips-v6/")
+		traefikdynamicpublicwhitelist.SetCloudflareEndpoints(
+			"https://www.cloudflare.com/ips-v4/",
+			"https://www.cloudflare.com/ips-v6/",
+		)
 	})
 
 	config := baseConfig(traefikdynamicpublicwhitelist.ProviderCloudflare)
@@ -171,7 +174,8 @@ func TestFastlyProvider(t *testing.T) {
 }
 
 func TestCloudfrontProvider(t *testing.T) {
-	payload := `{"prefixes":[{"ip_prefix":"198.51.100.0/24","service":"CLOUDFRONT"}],"ipv6_prefixes":[{"ipv6_prefix":"2001:db8::/48","service":"CLOUDFRONT"}]}`
+	payload := `{"prefixes":[{"ip_prefix":"198.51.100.0/24","service":"CLOUDFRONT"}],` +
+		`"ipv6_prefixes":[{"ipv6_prefix":"2001:db8::/48","service":"CLOUDFRONT"}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertHeader(t, r, "X-Kes-RequestID")
 		_, err := w.Write([]byte(payload))

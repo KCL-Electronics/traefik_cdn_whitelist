@@ -46,7 +46,7 @@ providers:
 
 ```
 labels:
-  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_whitelist
+  - traefik.http.routers.api.middlewares=public_ipwhitelist@plugin-traefik_dynamic_public_whitelist
 ```
 
 ## 配置说明

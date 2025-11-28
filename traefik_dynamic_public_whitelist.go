@@ -1,3 +1,5 @@
+// Package traefik_dynamic_public_whitelist exposes a Traefik provider plugin
+// that keeps IP allow lists in sync with CDN/public ranges.
 package traefik_dynamic_public_whitelist
 
 import (
@@ -93,11 +95,16 @@ type Provider struct {
 	ipStrategy            dynamic.IPStrategy
 	httpGet               httpGetter
 
-	cancel func()
+	baseCtx context.Context
+	cancel  func()
 }
 
 // New creates a new Provider plugin.
 func New(ctx context.Context, config *Config, name string) (*Provider, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	pollInterval := config.PollInterval
 	if strings.TrimSpace(pollInterval) == "" {
 		pollInterval = defaultPollInterval
@@ -138,6 +145,7 @@ func New(ctx context.Context, config *Config, name string) (*Provider, error) {
 		additionalSourceRange: append([]string(nil), config.AdditionalSourceRange...),
 		ipStrategy:            config.IPStrategy,
 		httpGet:               defaultHTTPGetter(httpClient),
+		baseCtx:               ctx,
 	}, nil
 }
 
@@ -152,7 +160,7 @@ func (p *Provider) Init() error {
 
 // Provide creates and send dynamic configuration.
 func (p *Provider) Provide(cfgChan chan<- json.Marshaler) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(p.baseCtx)
 	p.cancel = cancel
 
 	go func() {
@@ -201,11 +209,6 @@ func (p *Provider) Stop() error {
 	}
 
 	return nil
-}
-
-type IPAddresses struct {
-	v4     string
-	v6CIDR string
 }
 
 func ipv6ToCIDR(ipv6 string) (string, error) {
@@ -466,12 +469,7 @@ func defaultHTTPGetter(client *http.Client) httpGetter {
 		if err != nil {
 			return nil, err
 		}
-		defer func(Body io.ReadCloser) {
-			err := Body.Close()
-			if err != nil {
-				return
-			}
-		}(resp.Body)
+		defer closeBody(resp.Body)
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return nil, fmt.Errorf("unexpected status code %d from %s", resp.StatusCode, url)
@@ -483,6 +481,15 @@ func defaultHTTPGetter(client *http.Client) httpGetter {
 		}
 
 		return body, nil
+	}
+}
+
+func closeBody(body io.ReadCloser) {
+	if body == nil {
+		return
+	}
+	if err := body.Close(); err != nil {
+		log.Printf("traefik_dynamic_public_whitelist: failed closing response body: %v", err)
 	}
 }
 
@@ -501,6 +508,7 @@ func normalizeProviderName(name string) string {
 }
 
 // The following setters help tests override external endpoints without touching private vars.
+// SetCloudflareEndpoints overrides the default Cloudflare IPv4/IPv6 endpoints (used in tests).
 func SetCloudflareEndpoints(v4, v6 string) {
 	if v4 != "" {
 		cloudflareIPv4Endpoint = v4
@@ -510,12 +518,14 @@ func SetCloudflareEndpoints(v4, v6 string) {
 	}
 }
 
+// SetFastlyEndpoint overrides the Fastly IP range endpoint for testing.
 func SetFastlyEndpoint(url string) {
 	if url != "" {
 		fastlyEndpoint = url
 	}
 }
 
+// SetAwsIPRangesEndpoint overrides the AWS CloudFront IP range endpoint for testing.
 func SetAwsIPRangesEndpoint(url string) {
 	if url != "" {
 		awsIPRangesEndpoint = url

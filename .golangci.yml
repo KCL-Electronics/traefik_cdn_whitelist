@@ -25,19 +25,25 @@ linters-settings:
       - FIXME
   gofumpt:
     extra-rules: true
+  revive:
+    rules:
+      - name: var-naming
+        disabled: true
 
 linters:
-  enable-all: true
+  enable:
+    - govet
+    - staticcheck
+    - gosimple
+    - unused
+    - ineffassign
+    - revive
+    - errcheck
+    - gofmt
+    - gofumpt
+    - goimports
+    - misspell
   disable:
-    - interfacer # deprecated
-    - maligned # deprecated
-    - scopelint # deprecated
-    - golint # deprecated
-    - exhaustivestruct # deprecated
-    - cyclop # duplicate of gocyclo
-    - bodyclose # Too many false positives: https://github.com/timakin/bodyclose/issues/30
-    - dupl
-    - testpackage
     - tparallel
 
 issues:
