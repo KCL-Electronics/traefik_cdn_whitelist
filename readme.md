@@ -63,12 +63,12 @@ labels:
 
 ## Provider Behavior
 
-| Provider | Sources | Notes |
-| --- | --- | --- |
-| `cloudflare` | `https://www.cloudflare.com/ips-v4/` and `https://www.cloudflare.com/ips-v6/` | IPv6 list is ignored unless `whitelistIPv6` is true. |
-| `fastly` | `https://api.fastly.com/public-ip-list` | Parses `addresses` (IPv4) and `ipv6_addresses`. |
-| `cloudfront` | `https://ip-ranges.amazonaws.com/ip-ranges.json` | Filters entries whose `service` equals `CLOUDFRONT`. |
-| `custom` | User-defined resolvers | Each resolver must return a single textual IP. IPv6 responses are converted to `/64`.
+| Provider     | Sources                                                                       | Notes                                                                                 |
+|--------------|-------------------------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| `cloudflare` | `https://www.cloudflare.com/ips-v4/` and `https://www.cloudflare.com/ips-v6/` | IPv6 list is ignored unless `whitelistIPv6` is true.                                  |
+| `fastly`     | `https://api.fastly.com/public-ip-list`                                       | Parses `addresses` (IPv4) and `ipv6_addresses`.                                       |
+| `cloudfront` | `https://ip-ranges.amazonaws.com/ip-ranges.json`                              | Filters entries whose `service` equals `CLOUDFRONT`.                                  |
+| `custom`     | User-defined resolvers                                                        | Each resolver must return a single textual IP. IPv6 responses are converted to `/64`. |
 
 ### Custom Provider Walkthrough
 
@@ -106,7 +106,7 @@ go test ./...
 
 ### Release & Publishing
 
-With Go 1.2 toolchain:
+With Go 1.20 toolchain:
 
 1. `go mod tidy` and `go mod vendor` to pin dependencies.
 2. `go test ./...` followed by `make yaegi_test` to ensure native + Yaegi compatibility.

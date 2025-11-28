@@ -105,7 +105,7 @@ go test ./...
 
 ### 发布与推送
 
-使用 Go 1.2 工具链：
+使用 Go 1.20 工具链：
 
 1. 执行 `go mod tidy && go mod vendor`，确保依赖锁定。
 2. 运行 `go test ./...` 以及 `make yaegi_test`，验证本地与 Yaegi 兼容性。
